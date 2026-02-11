@@ -2,7 +2,7 @@ import streamlit as st
 import google.generativeai as genai
 
 # 1. 페이지 설정 (모바일 최적화)
-st.set_page_config(page_title="AI 목회비서 Pro", page_icon="✝️", layout="wide")
+st.set_page_config(page_title="AI 목회비서", page_icon="✝️", layout="wide")
 
 # 2. 디자인 CSS (모바일 UI 강화)
 st.markdown("""
@@ -15,18 +15,19 @@ st.markdown("""
         color: #1E293B;
     }
     
-    /* 불필요한 요소 숨김 */
-    header, footer, #MainMenu, .stDeployButton {visibility: hidden;}
+    /* 헤더, 푸터, 메뉴 등 불필요한 요소 전면 숨김 */
+    header, footer, #MainMenu, .stDeployButton {visibility: hidden !important;}
 
+    /* 모바일 좌우 여백 확보 */
     .block-container { 
-        padding: 1rem 1rem 3rem 1rem !important; 
+        padding: 1rem !important; 
         max-width: 100%;
     }
 
     /* 탭 스타일 */
     .stTabs [data-baseweb="tab-list"] { 
         justify-content: center; 
-        gap: 10px; 
+        gap: 15px; 
         border-bottom: 1px solid #E2E8F0; 
     }
     .stTabs [data-baseweb="tab"] { 
@@ -40,21 +41,20 @@ st.markdown("""
         border-bottom: 2px solid #1E3A8A !important; 
     }
 
-    /* 버튼 스타일 */
+    /* 버튼 스타일 (터치하기 편하게) */
     .stButton>button[kind="primary"] {
         width: 100%; 
         border-radius: 12px; 
-        background: linear-gradient(90deg, #1E3A8A 0%, #2563EB 100%) !important;
+        background: #1E3A8A !important;
         color: white !important; 
         height: 3.5rem !important; 
         font-size: 1.1rem !important;
         font-weight: 700; 
         margin-top: 15px; 
         border: none;
-        box-shadow: 0 4px 6px rgba(37, 99, 235, 0.2);
     }
     
-    /* 선택 상자 */
+    /* 선택 상자 (Selectbox) 스타일 */
     div[data-baseweb="select"] { border-radius: 10px !important; }
 
     /* 결과 박스 */
@@ -71,22 +71,24 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# 3. 모델 설정 (라이브러리 업데이트 후 최신 모델 사용)
+# 3. 모델 설정 (핵심 수정: 무조건 작동하는 모델 자동 납치)
 if "GOOGLE_API_KEY" in st.secrets:
     genai.configure(api_key=st.secrets["GOOGLE_API_KEY"])
 
-def get_best_model():
+def get_surviving_model():
     """
-    라이브러리가 업데이트되었으므로 최신 모델을 우선적으로 사용합니다.
+    오류를 낼 바에야, 현재 서버 목록에 있는 아무 모델이나 잡아옵니다.
     """
     try:
-        models = [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
-        # 1순위: Gemini 2.0 Flash (최신/고속)
-        if 'models/gemini-2.0-flash-exp' in models: return 'models/gemini-2.0-flash-exp'
-        # 2순위: Gemini 1.5 Pro (고성능)
-        if 'models/gemini-1.5-pro' in models: return 'models/gemini-1.5-pro'
-        # 3순위: Gemini 1.5 Flash (안정성)
-        return 'models/gemini-1.5-flash'
+        # 1. 서버가 가진 모델 리스트를 조회합니다.
+        for m in genai.list_models():
+            # 2. 'generateContent'(글쓰기) 기능이 있는 첫 번째 모델을 발견하면
+            if 'generateContent' in m.supported_generation_methods:
+                # 3. 그 녀석을 바로 반환하고 함수 종료 (이름을 따지지 않음)
+                return m.name
+        
+        # 4. 만약 조회조차 안 되면 구버전의 왕 'gemini-pro'를 강제 호출
+        return 'gemini-pro'
     except:
         return 'gemini-pro'
 
@@ -97,7 +99,7 @@ if 'last_mode' not in st.session_state: st.session_state['last_mode'] = ""
 # 4. 앱 구성
 tab1, tab2 = st.tabs(["📝 목회 원고", "🎨 성화 도안"])
 
-# === TAB 1: 텍스트 생성 (드롭다운 메뉴) ===
+# === TAB 1: 텍스트 생성 (드롭다운 메뉴 방식) ===
 with tab1:
     menu = {
         "✨ 작업을 선택하세요": "",
@@ -115,17 +117,20 @@ with tab1:
         if menu[mode]: st.session_state['p_input'] = menu[mode]
         st.session_state['last_mode'] = mode
 
-    user_text = st.text_area("내용 입력", value=st.session_state['p_input'], height=200)
+    user_text = st.text_area("내용 입력", value=st.session_state['p_input'], height=200, placeholder="메뉴를 선택하거나 직접 입력하세요.")
 
     if st.button("AI 요청하기", type="primary"):
         if user_text:
-            with st.spinner("최신 Gemini가 작성 중입니다..."):
+            with st.spinner("AI가 작성 중입니다..."):
                 try:
-                    model = genai.GenerativeModel(get_best_model())
+                    # 여기서 '생존 모델'을 가져옵니다.
+                    model_name = get_surviving_model()
+                    model = genai.GenerativeModel(model_name)
                     response = model.generate_content(f"당신은 목회 비서입니다.\n{user_text}")
                     st.session_state['res_txt'] = response.text
                 except Exception as e:
                     st.error(f"오류: {e}")
+                    st.caption("서버 연결이 불안정합니다. 잠시 후 다시 시도해주세요.")
         else: st.warning("내용을 입력해 주세요.")
 
     if 'res_txt' in st.session_state:
@@ -134,12 +139,14 @@ with tab1:
 
 # === TAB 2: 성화 도안 ===
 with tab2:
+    st.info("💡 **팁:** 여기서 '영어 도안'을 만든 뒤, 아래 [Gemini 열기] 버튼을 눌러 붙여넣으세요.")
     idea = st.text_input("그림 아이디어 (한글)", placeholder="예: 갈릴리 호수 위를 걸으시는 예수님")
-    if st.button("영어 도안 생성", type="primary"):
+    
+    if st.button("최적 도안 생성", type="primary"):
         if idea:
-            with st.spinner("생성 중..."):
+            with st.spinner("도안 생성 중..."):
                 try:
-                    planner = genai.GenerativeModel(get_best_model())
+                    planner = genai.GenerativeModel(get_surviving_model())
                     res = planner.generate_content(f"Role: Christian Art Director. Task: Convert '{idea}' to detailed English prompt. Output ONLY prompt.")
                     st.session_state['final_prompt'] = res.text
                 except Exception as e: st.error(f"실패: {e}")
@@ -149,3 +156,6 @@ with tab2:
         c1, c2 = st.columns(2)
         with c1: st.link_button("🍌 Gemini 열기", "https://gemini.google.com/app", use_container_width=True)
         with c2: st.link_button("🎨 ImageFX 열기", "https://aitestkitchen.withgoogle.com/tools/image-fx", use_container_width=True)
+
+# 하단 여백
+st.markdown("<div style='height:50px;'></div>", unsafe_allow_html=True)
