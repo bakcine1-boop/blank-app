@@ -2,86 +2,154 @@ import streamlit as st
 import google.generativeai as genai
 import time
 
-# 1. 페이지 설정
-st.set_page_config(page_title="CTS AI 목회비서", page_icon="✝️", layout="wide")
+# 1. 페이지 설정 및 디자인 최적화
+st.set_page_config(
+    page_title="CTS 미디어목회지원센터 | AI 목회비서", 
+    page_icon="✝️", 
+    layout="wide"
+)
 
-st.title("✝️ CTS AI 목회 창작소")
-st.markdown("---")
+# 2. Genspark 스타일의 커스텀 CSS (디자인 핵심)
+st.markdown("""
+    <style>
+    /* 전체 배경색 및 폰트 설정 */
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;700&display=swap');
+    html, body, [class*="css"] {
+        font-family: 'Noto Sans KR', sans-serif;
+        background-color: #F8F9FA;
+    }
+    
+    /* 상단 헤더 섹션 */
+    .main-header {
+        background-color: #1E3A8A;
+        padding: 2rem;
+        border-radius: 10px;
+        color: white;
+        text-align: center;
+        margin-bottom: 2rem;
+    }
+    
+    /* 서비스 카드 스타일 */
+    .service-card {
+        background-color: white;
+        padding: 1.5rem;
+        border-radius: 15px;
+        border-left: 5px solid #1E3A8A;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+        margin-bottom: 1rem;
+    }
+    
+    /* 입력창 및 여백 조정 */
+    .stTextArea textarea { border-radius: 10px; }
+    .stButton>button {
+        border-radius: 8px;
+        font-weight: bold;
+        background-color: #1E3A8A !important;
+        color: white !important;
+    }
+    </style>
+    """, unsafe_allow_html=True)
 
-# 2. 사이드바 (설정)
-with st.sidebar:
-    st.header("⚙️ 설정 및 모드 선택")
-    
-    # API 키 입력창
-    api_key = st.text_input("구글 API Key를 입력하세요", type="password")
-    
-    # 기능 선택 라디오 버튼
-    mode = st.radio("어떤 작업을 하시겠습니까?", ["📝 설교/칼럼 작성 (Gemini)", "🎨 설교 이미지 생성 (AI 화가)"])
-    
-    st.info("💡 '이미지 생성'은 API 키 없이도 체험 가능합니다.")
-    st.markdown("---")
-    st.caption("CTS Media Ministry Center © 2026")
+# 3. API 키 보안 처리 (Secrets 활용)
+# Streamlit 클라우드 설정의 Secrets 항목에 GOOGLE_API_KEY가 저장되어 있어야 합니다.
+if "GOOGLE_API_KEY" in st.secrets:
+    genai.configure(api_key=st.secrets["GOOGLE_API_KEY"])
+else:
+    st.error("⚠️ 시스템 설정에서 API 키를 찾을 수 없습니다.")
+    st.stop()
 
-# 3. 메인 기능: 설교/칼럼 작성 (Gemini)
-if mode == "📝 설교/칼럼 작성 (Gemini)":
-    st.subheader("📝 설교 및 목회 칼럼 도우미")
-    st.caption("제미나이(Gemini Pro)가 목사님의 묵상을 글로 정리해 드립니다.")
+# 4. 상단 브랜딩 영역 (Genspark 디자인 참고)
+st.markdown("""
+    <div class="main-header">
+        <h1 style='color: white; margin: 0;'>CTS 미디어목회지원센터</h1>
+        <p style='font-size: 1.1rem; opacity: 0.9;'>콘텐츠지원국 AI 목회 비서 시스템</p>
+    </div>
+    """, unsafe_allow_html=True)
+
+# 5. 메인 레이아웃 (좌측 메뉴 / 우측 작업 영역)
+tab1, tab2 = st.tabs(["📝 AI 설교·칼럼 작성", "🎨 AI 성화 이미지 생성"])
+
+# --- 탭 1: 설교 및 칼럼 작성 ---
+with tab1:
+    col1, col2 = st.columns([1, 1.2], gap="large")
     
-    if not api_key:
-        st.warning("👈 왼쪽 사이드바에 구글 API Key를 먼저 입력해주세요!")
-    else:
-        genai.configure(api_key=api_key)
+    with col1:
+        st.markdown("""
+            <div class="service-card">
+                <h3>📖 설교문 작성 도우미</h3>
+                <p>본문과 주제를 입력하시면 제미나이가 초안을 작성합니다.</p>
+            </div>
+        """, unsafe_allow_html=True)
         
-        # 입력창
-        topic = st.text_area("주제, 성경 본문, 예화 등을 입력해주세요.", height=150, 
-                            placeholder="예: 마태복음 5장 13-16절을 본문으로 '세상의 소금과 빛'에 대한 3대지 설교 개요를 짜줘. 청년들이 이해하기 쉽게 작성해줘.")
+        topic = st.text_area(
+            "작성 요청 사항", 
+            height=250, 
+            placeholder="예시: 마태복음 5장 13-16절을 본문으로 '세상의 소금과 빛' 설교 개요를 3대지로 짜줘. 현대적인 예화를 포함해줘."
+        )
         
-        if st.button("설교문 작성 시작", type="primary"):
-            with st.spinner("제미나이가 말씀을 묵상하고 있습니다..."):
-                try:
-                    model = genai.GenerativeModel('gemini-pro')
-                    response = model.generate_content(topic)
-                    
-                    st.success("작성이 완료되었습니다!")
-                    st.markdown("### 📖 결과물")
-                    st.write(response.text)
-                    
-                    # 복사 편의를 위한 코드 블록 제공
-                    with st.expander("텍스트 복사하기"):
-                        st.code(response.text)
-                        
-                except Exception as e:
-                    st.error(f"오류가 발생했습니다: {e}")
+        if st.button("AI 초안 생성 시작 🚀", key="btn_sermon"):
+            if topic:
+                with st.spinner("메시지를 분석하여 묵상 중입니다..."):
+                    try:
+                        model = genai.GenerativeModel('gemini-pro')
+                        response = model.generate_content(topic)
+                        st.session_state['sermon_result'] = response.text
+                    except Exception as e:
+                        st.error(f"오류가 발생했습니다: {e}")
+            else:
+                st.warning("작성할 내용을 입력해주세요.")
 
-# 4. 메인 기능: 이미지 생성 (AI 화가)
-elif mode == "🎨 설교 이미지 생성 (AI 화가)":
-    st.subheader("🎨 설교 예화/포스터 이미지 생성")
-    st.caption("설교 화면에 띄울 이미지를 AI가 즉석에서 그려드립니다.")
-    
-    # 이미지 프롬프트 입력
-    img_desc = st.text_input("어떤 그림을 원하시나요? (구체적일수록 좋습니다)", 
-                            placeholder="예: 거친 파도 위를 걸어가시는 예수님의 뒷모습, 유화 스타일, 웅장한 빛")
-    
-    # 스타일 선택
-    style = st.selectbox("화풍 선택", ["선택 안 함", "수채화 (Watercolor)", "유화 (Oil Painting)", "초현실주의 (Cinematic)", "일러스트 (Illustration)", "사진 같은 (Photorealistic)"])
-    
-    if st.button("그림 그리기 🎨", type="primary"):
-        if not img_desc:
-            st.warning("그림에 대한 설명을 입력해주세요!")
+    with col2:
+        if 'sermon_result' in st.session_state:
+            st.markdown("### 📄 생성된 결과물")
+            st.info("내용을 확인하신 후 아래 코드 상자에서 복사하여 사용하세요.")
+            st.write(st.session_state['sermon_result'])
+            st.divider()
+            with st.expander("간편하게 텍스트 복사하기"):
+                st.code(st.session_state['sermon_result'], language="markdown")
         else:
-            with st.spinner("AI 화가가 붓을 들었습니다... (약 5초 소요)"):
-                # 프롬프트 조합 (스타일 추가)
-                final_prompt = img_desc
-                if style != "선택 안 함":
-                    final_prompt += f", {style} style"
-                
-                # 무료 이미지 생성 API 활용 (Pollinations AI)
-                # 공백을 URL 형식(%20)으로 변환
-                encoded_prompt = final_prompt.replace(" ", "%20")
-                image_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?nologo=true"
-                
-                # 이미지 표시 (약간의 지연 시간 후 로드)
-                time.sleep(2)
-                st.image(image_url, caption=f"'{img_desc}' 생성 결과", use_column_width=True)
-                
-                st.success("완성되었습니다! 이미지를 마우스 우클릭하여 저장하세요.")
+            st.markdown("""
+                <div style='text-align: center; color: #666; padding-top: 5rem;'>
+                    왼쪽에서 내용을 입력하고 버튼을 누르면 이곳에 결과가 표시됩니다.
+                </div>
+            """, unsafe_allow_html=True)
+
+# --- 탭 2: 이미지 생성 ---
+with tab2:
+    col_img1, col_img2 = st.columns([1, 1.2], gap="large")
+    
+    with col_img1:
+        st.markdown("""
+            <div class="service-card">
+                <h3>🎨 AI 성화 생성기</h3>
+                <p>설교 예화나 포스터에 사용할 이미지를 생성합니다.</p>
+            </div>
+        """, unsafe_allow_html=True)
+        
+        img_desc = st.text_input("그림 설명 (예: 기도하는 소년, 웅장한 빛)", placeholder="영어로 입력 시 품질이 더 좋아집니다.")
+        style = st.selectbox("추천 화풍", ["유화 (Oil Painting)", "수채화 (Watercolor)", "시네마틱 (Cinematic)", "일러스트 (Illustration)"])
+        
+        if st.button("그림 그리기 시작 🎨", key="btn_img"):
+            if img_desc:
+                with st.spinner("AI 화가가 생성 중입니다..."):
+                    final_prompt = f"{img_desc}, {style} style"
+                    encoded_prompt = final_prompt.replace(" ", "%20")
+                    st.session_state['gen_image_url'] = f"https://image.pollinations.ai/prompt/{encoded_prompt}?nologo=true"
+                    time.sleep(2)
+            else:
+                st.warning("설명을 입력해주세요.")
+
+    with col_img2:
+        if 'gen_image_url' in st.session_state:
+            st.image(st.session_state['gen_image_url'], use_container_width=True, caption="생성된 이미지")
+            st.success("이미지가 완성되었습니다! 마우스 우클릭으로 저장 가능합니다.")
+        else:
+            st.markdown("""
+                <div style='text-align: center; color: #666; padding-top: 5rem;'>
+                    생성된 그림이 이곳에 표시됩니다.
+                </div>
+            """, unsafe_allow_html=True)
+
+# 하단 푸터
+st.markdown("---")
+st.caption("CTS Media Ministry Center | 콘텐츠지원국 국장 전용 시스템 © 2026")
