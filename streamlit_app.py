@@ -4,13 +4,13 @@ import google.generativeai as genai
 # 1. 페이지 설정
 st.set_page_config(page_title="CTS AI 목회비서", page_icon="🙏", layout="wide")
 
-# 2. 디자인 CSS (젠스파크 스타일)
+# 2. 디자인 CSS (젠스파크 스타일 통합)
 st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap');
     html, body, [class*="css"] { font-family: 'Noto Sans KR', sans-serif; background-color: #FFFFFF !important; }
     .block-container { padding-top: 0.5rem !important; padding-bottom: 2rem !important; max-width: 900px; }
-    .stTabs [data-baseweb="tab-list"] { justify-content: center; gap: 20px; }
+    .stTabs [data-baseweb="tab-list"] { justify-content: center; gap: 20px; border-bottom: 1px solid #F1F5F9; }
     div[data-testid="stHorizontalBlock"] button {
         width: 100% !important; background-color: #F8FAFC !important;
         border-radius: 10px !important; font-size: 1.1rem !important;
@@ -29,18 +29,20 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# 3. 모델 설정 (API 키 보안 확인)
+# 3. 모델 설정 및 보안 확인 (Secrets 활용)
 if "GOOGLE_API_KEY" in st.secrets:
     genai.configure(api_key=st.secrets["GOOGLE_API_KEY"])
 else:
-    st.error("Secrets 설정에서 GOOGLE_API_KEY를 확인해주세요.")
+    st.error("Streamlit Secrets 설정에서 GOOGLE_API_KEY를 확인해주세요.")
+    st.stop()
 
 if 'p_input' not in st.session_state: st.session_state['p_input'] = ""
 
-# 4. 앱 구성
+# 4. 메인 콘텐츠 구성
 tab1, tab2 = st.tabs(["📄 목회 원고 작성", "🎨 이미지 생성"])
 
 with tab1:
+    # 가로 3단 버튼 (프롬프트 내장)
     col1, col2, col3 = st.columns(3)
     with col1:
         if st.button("📖 설교"): 
@@ -58,35 +60,31 @@ with tab1:
         if user_text:
             with st.spinner("AI가 원고를 작성 중입니다..."):
                 try:
-                    # [수정포인트] 가장 범용적인 모델 이름으로 호출
+                    # [수정] 모델 명칭을 가장 최신 표준인 'gemini-1.5-flash'로 고정
                     model = genai.GenerativeModel('gemini-1.5-flash')
                     response = model.generate_content(user_text)
                     st.session_state['res_txt'] = response.text
                 except Exception as e:
-                    # 만약 위 모델이 안되면 구버전인 'gemini-pro'로 한 번 더 시도
-                    try:
-                        model = genai.GenerativeModel('gemini-pro')
-                        response = model.generate_content(user_text)
-                        st.session_state['res_txt'] = response.text
-                    except Exception as e2:
-                        st.error(f"모델 연결 오류: {e2}")
+                    # 상세 에러 메시지 출력으로 원인 파악 용이하게 수정
+                    st.error(f"AI 응답 생성 실패: {str(e)}")
+        else:
+            st.warning("내용을 입력해 주세요.")
 
     if 'res_txt' in st.session_state:
         st.markdown("<p style='font-weight:700; color:#1E3A8A; margin-top:20px;'>🖋️ 작성 결과</p>", unsafe_allow_html=True)
+        # 줄바꿈 처리
         p_text = st.session_state['res_txt'].replace("\n", "<br>")
         st.markdown('<div class="result-box">' + p_text + '</div>', unsafe_allow_html=True)
         st.download_button("💾 파일로 저장", st.session_state['res_txt'], file_name="CTS_AI_원고.txt", use_container_width=True)
 
 with tab2:
-    img_in = st.text_input("img", placeholder="그림 설명을 입력하세요", label_visibility="collapsed")
+    img_in = st.text_input("이미지 설명", placeholder="예: 평화로운 숲속 교회, 수채화풍", label_visibility="collapsed")
     if st.button("이미지 생성 시작 🎨", type="primary"):
         if img_in:
-            with st.spinner("그리는 중..."):
+            with st.spinner("이미지를 생성하는 중..."):
                 encoded = img_in.replace(" ", "%20")
                 st.session_state['res_img'] = f"https://image.pollinations.ai/prompt/{encoded}?nologo=true"
     if 'res_img' in st.session_state:
         st.image(st.session_state['res_img'], use_container_width=True)
-
-st.markdown("<div class='footer'>CTS Media Ministry Center © 2026</div>", unsafe_allow_html=True)
 
 st.markdown("<div class='footer'>CTS Media Ministry Center © 2026 | 콘텐츠지원국</div>", unsafe_allow_html=True)
