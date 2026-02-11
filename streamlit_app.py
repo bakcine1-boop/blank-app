@@ -10,7 +10,7 @@ st.markdown("""
     @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap');
     html, body, [class*="css"] { font-family: 'Noto Sans KR', sans-serif; background-color: #FFFFFF !important; }
     .block-container { padding-top: 0.5rem !important; padding-bottom: 2rem !important; max-width: 900px; }
-    .stTabs [data-baseweb="tab-list"] { justify-content: center; gap: 20px; border-bottom: 1px solid #F1F5F9; }
+    .stTabs [data-baseweb="tab-list"] { justify-content: center; gap: 20px; }
     div[data-testid="stHorizontalBlock"] button {
         width: 100% !important; background-color: #F8FAFC !important;
         border-radius: 10px !important; font-size: 1.1rem !important;
@@ -29,20 +29,33 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# 3. 모델 설정 및 보안 확인 (Secrets 활용)
+# 3. 모델 설정 및 보안 확인
 if "GOOGLE_API_KEY" in st.secrets:
     genai.configure(api_key=st.secrets["GOOGLE_API_KEY"])
 else:
-    st.error("Streamlit Secrets 설정에서 GOOGLE_API_KEY를 확인해주세요.")
+    st.error("Streamlit Secrets에서 GOOGLE_API_KEY를 입력해주세요.")
     st.stop()
+
+# 4. 사용 가능한 모델 자동 감지 (에러 방지 핵심 로직)
+def get_best_model():
+    try:
+        available_models = [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
+        # 1순위: 1.5-flash, 2순위: 1.0-pro (gemini-pro)
+        for target in ['models/gemini-1.5-flash', 'models/gemini-pro']:
+            if target in available_models:
+                return target
+        return available_models[0] if available_models else "models/gemini-pro"
+    except:
+        return "gemini-1.5-flash" # 기본값
+
+selected_model_name = get_best_model()
 
 if 'p_input' not in st.session_state: st.session_state['p_input'] = ""
 
-# 4. 메인 콘텐츠 구성
+# 5. 앱 구성
 tab1, tab2 = st.tabs(["📄 목회 원고 작성", "🎨 이미지 생성"])
 
 with tab1:
-    # 가로 3단 버튼 (프롬프트 내장)
     col1, col2, col3 = st.columns(3)
     with col1:
         if st.button("📖 설교"): 
@@ -58,21 +71,19 @@ with tab1:
     
     if st.button("AI 비서에게 요청하기", type="primary"):
         if user_text:
-            with st.spinner("AI가 원고를 작성 중입니다..."):
+            with st.spinner(f"AI({selected_model_name})가 원고를 작성 중입니다..."):
                 try:
-                    # [수정] 모델 명칭을 가장 최신 표준인 'gemini-1.5-flash'로 고정
-                    model = genai.GenerativeModel('gemini-1.5-flash')
+                    # 감지된 최적의 모델로 생성
+                    model = genai.GenerativeModel(selected_model_name)
                     response = model.generate_content(user_text)
                     st.session_state['res_txt'] = response.text
                 except Exception as e:
-                    # 상세 에러 메시지 출력으로 원인 파악 용이하게 수정
-                    st.error(f"AI 응답 생성 실패: {str(e)}")
+                    st.error(f"연결 실패: {str(e)}")
         else:
             st.warning("내용을 입력해 주세요.")
 
     if 'res_txt' in st.session_state:
         st.markdown("<p style='font-weight:700; color:#1E3A8A; margin-top:20px;'>🖋️ 작성 결과</p>", unsafe_allow_html=True)
-        # 줄바꿈 처리
         p_text = st.session_state['res_txt'].replace("\n", "<br>")
         st.markdown('<div class="result-box">' + p_text + '</div>', unsafe_allow_html=True)
         st.download_button("💾 파일로 저장", st.session_state['res_txt'], file_name="CTS_AI_원고.txt", use_container_width=True)
